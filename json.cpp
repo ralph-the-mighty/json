@@ -5,6 +5,46 @@
 #include <stdio.h>
 #include <assert.h>
 
+#define MAX_OBJECT_SIZE 256
+#define MAX_ARRAY_SIZE 256
+
+typedef enum {
+	JSON_NULL = 0,
+	JSON_INTEGER,
+	JSON_STRING,
+	JSON_BOOL,
+	JSON_ARRAY,
+	JSON_OBJECT,
+} json_type;
+
+
+struct json_pair;
+
+struct json_value {
+	json_type type;
+	char* string;
+	int boolean;
+	int integer;
+
+	int num_pairs;
+	json_pair** pairs;
+	
+
+	int num_values;
+	json_value** values;
+	
+};
+
+
+struct json_pair {
+	char* name;
+	json_value* value;
+};
+
+
+
+
+
 
 
 void error(const char* msg) {
@@ -81,6 +121,14 @@ void intern_string(char* start, char* end) {
 	*end = 0;
 }
 
+//returns next non-whitespace char
+char get_next_char() {
+	char* c = text;
+	while (isspace(*c)) {
+		c++;
+	}
+	return *c;
+}
 
 
 void consume_token() {
@@ -138,55 +186,137 @@ void consume_token() {
 }
 
 
-void parse_object();
-void parse_array();
+
+json_value* initialize_value(json_type type) {
+	json_value* value = (json_value*)malloc(sizeof(json_value));
+	memset(value, 0, sizeof(json_value));
+	value->type = type;
+	return value;
+}
+
+void free_value(json_value* value) {
+	free(value);
+}
 
 
-void parse_value() {
+json_value* parse_object();
+json_value* parse_array();
+
+
+json_value* parse_value() {
+
+	json_value* value = initialize_value(JSON_NULL);
+
 	switch (token) {
 		case (Token_t) '{':
-			parse_object();
+			free_value(value);
+			return parse_object();
 			break;
 		case (Token_t) '[':
-			parse_array();
+			free_value(value);
+			return parse_array();
 			break;
 		case TOKEN_NUM:
+			value->type = JSON_INTEGER;
+			value->integer = token_number;
+			consume_token();
+			return value;
+			break;
 		case TOKEN_STRING:
+			value->type = JSON_STRING;
+			value->string = token_string;
+			consume_token();
+			return value;
+			break;
 		case TOKEN_TRUE:
+			value->type = JSON_BOOL;
+			value->boolean = 1;
+			consume_token();
+			return value;
+			break;
 		case TOKEN_FALSE:
+			value->type = JSON_BOOL;
+			value->boolean = 0;
+			consume_token();
+			return value;
+			break;
 		case TOKEN_NULL:
 			consume_token();
+			return value;
 			break;
 		default:
+			error("parse_value(): unrecognized token type");
 			break;
 	}
 }
 
-void parse_pair() {
+json_pair* parse_pair() {
+	json_pair* pair = (json_pair*)malloc(sizeof(json_pair));
 	expect_token(TOKEN_STRING);
+	pair->name = token_string;
 	expect_token((Token_t) ':');
-	parse_value();
+	pair->value = parse_value();
+	return pair;
 }
 
 
-void parse_object() {
+json_value* parse_object() {
+
+	json_value* object = initialize_value(JSON_OBJECT);
+
+
 	consume_token();
-	parse_pair();
-	while (token == (Token_t) ',') {
-		consume_token();
-		parse_pair();
+	if (get_next_char() == '}') {		
+		return object;
+	} else {
+
+		// initilize pairs array
+		// just do the dumb thing for now and 
+		// allocate a fixed size array every time.
+		object->pairs = (json_pair**)malloc(sizeof(json_pair) * MAX_OBJECT_SIZE);
+		memset(object->pairs, 0, sizeof(json_pair) * MAX_OBJECT_SIZE);
+
+		object->pairs[object->num_pairs++] = parse_pair();
+
+		while (token == (Token_t) ',') {
+			//TODO: bounds check
+			consume_token();
+			object->pairs[object->num_pairs++] = parse_pair();
+		}
+
+		expect_token((Token_t)'}');
 	}
-	expect_token((Token_t)'}');
+
+	return object;	
 }
 
-void parse_array() {
+json_value* parse_array() {
+
+	json_value* array = initialize_value(JSON_ARRAY);
+
 	consume_token();
-	parse_value();
-	while (token == Token_t(',')) {
-		consume_token();
-		parse_value();
+	if (get_next_char() == ']') {
+		return array;
+	} else {
+
+
+		// initilize values array
+		// just do the dumb thing for now and 
+		// allocate a fixed size array every time.
+		array->values = (json_value**)malloc(sizeof(json_value) * MAX_ARRAY_SIZE);
+		memset(array->values, 0, sizeof(json_value) * MAX_ARRAY_SIZE);
+
+		array->values[array->num_values++] = parse_value();
+
+		while (token == (Token_t)',') {
+			//TODO: bounds check
+			consume_token();
+			array->values[array->num_values++] = parse_value();
+		}
+		expect_token((Token_t) ']');
 	}
-	expect_token((Token_t) ']');
+	
+	return array;
 }
 
 
@@ -218,5 +348,5 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 
 
 	consume_token();
-	parse_object();
+	json_value* root = parse_object();
 }
