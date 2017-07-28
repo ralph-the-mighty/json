@@ -1,3 +1,18 @@
+//
+//				TODO				
+//				1) bounds checking on objects and arrays
+//				2) check empty string handling
+//				3) handle escape sequences
+//				4) handle all legal numeric expressions (ints, floats, scientific notation)
+//				5) recursive freeing of nodes
+//				6) implement object as a bone fide hash table
+
+
+
+
+
+
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <string.h>
@@ -49,7 +64,8 @@ struct json_pair {
 
 void error(const char* msg) {
 	MessageBoxA(0, msg, "Error", MB_OK);
-	__debugbreak();
+	//__debugbreak();
+	exit(1);
 }
 
 
@@ -179,7 +195,7 @@ void consume_token() {
 		case 0:
 			break;
 		default:
-			error("unknown token!");
+			errorf("unknown token %c", *text);
 			break;
 		}
 	}
@@ -321,8 +337,44 @@ json_value* parse_array() {
 
 
 
+json_value* object_get(json_value* object, char* name) {
+	//TODO: check to make sure object is actually a non-empty object
+	for (unsigned int i = 0; i < object->num_pairs; i++) {
+		char* obj_string = object->pairs[i]->name;
+		char* cmp_string = name;
+		while (*cmp_string && *obj_string && *cmp_string == *obj_string) {
+			cmp_string++;
+			obj_string++;
+		}
+
+		if (*cmp_string == 0 && *obj_string == 0) {
+			return object->pairs[i]->value;
+		}
+	}
+	errorf("no entry for name: %s", name);
+}
 
 
+json_value* array_get(json_value* array, int index) {
+	//TODO:
+	//assert index > 0
+	//assert type of array is array
+
+	if (index >= array->num_values) {
+		error("out of bounds access to array");
+	} else {
+		return array->values[index];
+	}
+
+}
+
+
+
+json_value* parse(char* string) {
+	text = string;
+	consume_token();
+	return parse_object();
+}
 
 
 
@@ -341,12 +393,15 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 	}
 
 	file_size = (size_t)GetFileSize((HANDLE)file_handle, 0);
-	text = (char*)malloc(file_size + 1);
-	ReadFile((HANDLE)file_handle, text, file_size, 0, 0);
+	char* json_string = (char*)malloc(file_size + 1);
+	ReadFile((HANDLE)file_handle, json_string, file_size, 0, 0);
 	CloseHandle((HANDLE)file_handle);
-	text[file_size] = 0;
+	json_string[file_size] = 0;
 
 
-	consume_token();
-	json_value* root = parse_object();
+	json_value* root = parse(json_string);
+	json_value* server = object_get(root, "server");
+	json_value* that = object_get(server, "that");
+	json_value* those = object_get(server, "those");
+	json_value* entry = array_get(those, 2);
 }
